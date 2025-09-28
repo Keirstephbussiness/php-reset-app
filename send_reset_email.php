@@ -1,6 +1,6 @@
 <?php
-// CRITICAL: Set CORS headers IMMEDIATELY - before ANY other code
-header('Access-Control-Allow-Origin: http://127.0.0.1:5500'); // Specific origin for security
+// CRITICAL: Set CORS headers IMMEDIATELY
+header('Access-Control-Allow-Origin: http://127.0.0.1:5500');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json');
@@ -11,28 +11,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Enable error reporting to catch issues
-error_reporting(E_ALL);
-ini_set('display_errors', 0); // Don't display errors to user
-ini_set('log_errors', 1);
-
 $response = ['success' => false, 'message' => ''];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Invalid request method.');
-    }
-
-    // Check for PHPMailer BEFORE requiring it
-    if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
-        throw new Exception('Server configuration error: Dependencies not installed.');
-    }
-
-    // Wrap require in try-catch
-    try {
-        require_once __DIR__ . '/vendor/autoload.php';
-    } catch (Throwable $e) {
-        throw new Exception('Server configuration error: Failed to load dependencies.');
     }
 
     // Validate email
@@ -41,57 +24,59 @@ try {
         throw new Exception('Invalid email address.');
     }
 
-    // Check required environment variables
-    $smtpPassword = getenv('SMTP_PASSWORD');
-    if (empty($smtpPassword)) {
-        throw new Exception('Server configuration error: SMTP not configured.');
-    }
-
-    use PHPMailer\PHPMailer\PHPMailer;
-    use PHPMailer\PHPMailer\Exception as PHPMailerException;
-
     $token = bin2hex(random_bytes(32));
     $resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
 
-    $mail = new PHPMailer(true);
-    
-    // SMTP Configuration
-    $mail->isSMTP();
-    $mail->Host = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = getenv('SMTP_USERNAME') ?: 'kiersteph@gmail.com';
-    $mail->Password = $smtpPassword;
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = (int)(getenv('SMTP_PORT') ?: 587);
-    
-    // Email settings
-    $mail->setFrom(getenv('FROM_EMAIL') ?: 'kiersteph@gmail.com', getenv('FROM_NAME') ?: 'Student Portal');
-    $mail->addAddress($email);
-    
-    $mail->isHTML(true);
-    $mail->Subject = 'Password Reset Request';
-    $mail->Body = "
-        <h2>Password Reset</h2>
-        <p>Click the link below to reset your password. This link expires in 1 hour.</p>
-        <a href='$resetLink' style='background-color: #007bff; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;'>Reset Password</a>
-        <p>If you didn't request this, ignore this email.</p>
-    ";
-    $mail->AltBody = "Click here to reset your password: $resetLink (expires in 1 hour)";
+    // Email content
+    $subject = 'Password Reset Request - Student Portal';
+    $message = "
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <title>Password Reset</title>
+</head>
+<body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+    <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
+        <h2 style='color: #007bff;'>Password Reset Request</h2>
+        <p>You have requested to reset your password for Student Portal.</p>
+        <p>Click the button below to reset your password. This link will expire in 1 hour.</p>
+        <div style='text-align: center; margin: 30px 0;'>
+            <a href='$resetLink' style='background-color: #007bff; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Reset Password</a>
+        </div>
+        <p>If the button doesn't work, copy and paste this link into your browser:</p>
+        <p style='word-break: break-all; background-color: #f8f9fa; padding: 10px; border-radius: 4px;'>$resetLink</p>
+        <hr style='margin: 30px 0; border: none; border-top: 1px solid #eee;'>
+        <p style='font-size: 14px; color: #666;'>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+        <p style='font-size: 14px; color: #666;'>This is an automated message, please do not reply to this email.</p>
+    </div>
+</body>
+</html>";
 
-    $mail->send();
-    $response['success'] = true;
-    $response['message'] = 'Reset email sent successfully.';
+    // Email headers
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/html; charset=UTF-8',
+        'From: Student Portal <noreply@' . parse_url($_SERVER['HTTP_HOST'] ?? 'localhost', PHP_URL_HOST) . '>',
+        'Reply-To: noreply@' . parse_url($_SERVER['HTTP_HOST'] ?? 'localhost', PHP_URL_HOST),
+        'X-Mailer: PHP/' . phpversion(),
+        'X-Priority: 3',
+        'X-MSMail-Priority: Normal'
+    ];
 
-} catch (PHPMailerException $e) {
-    $response['message'] = 'Failed to send email. Please try again later.';
-    error_log("PHPMailer Error: " . $e->getMessage());
+    // Send email using PHP's built-in mail() function
+    if (mail($email, $subject, $message, implode("\r\n", $headers))) {
+        $response['success'] = true;
+        $response['message'] = 'Reset email sent successfully.';
+        
+        // Log successful email (optional)
+        error_log("Password reset email sent to: " . $email);
+    } else {
+        throw new Exception('Failed to send email. Mail server may not be configured.');
+    }
+
 } catch (Exception $e) {
     $response['message'] = $e->getMessage();
-    error_log("General Error: " . $e->getMessage());
+    error_log("Email Error: " . $e->getMessage());
 } catch (Throwable $e) {
-    $response['message'] = 'Server error. Please try again later.';
-    error_log("Fatal Error: " . $e->getMessage());
-}
-
-echo json_encode($response);
-?>
+    $response['message']
