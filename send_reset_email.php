@@ -2,17 +2,9 @@
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// Ensure vendor/autoload.php is loaded
-if (!file_exists('vendor/autoload.php')) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Server error: PHPMailer not found']);
-    exit;
-}
-require 'vendor/autoload.php';
-
-// Set CORS headers
+// Set CORS headers immediately
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *'); // Allow all origins for testing
+header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -22,22 +14,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Initialize response
 $response = ['success' => false, 'message' => ''];
 
+// Log request for debugging
+file_put_contents('/var/log/php83/app.log', date('Y-m-d H:i:s') . " Request: " . json_encode($_SERVER) . "\n", FILE_APPEND);
+
+// Check for vendor/autoload.php
+if (!file_exists('vendor/autoload.php')) {
+    http_response_code(500);
+    $response['message'] = 'Server error: PHPMailer not found';
+    echo json_encode($response);
+    exit;
+}
+require 'vendor/autoload.php';
+
+// Validate request method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $response['message'] = 'Invalid request method.';
+    http_response_code(405);
+    $response['message'] = 'Invalid request method';
     echo json_encode($response);
     exit;
 }
 
+// Validate email
 $email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $response['message'] = 'Invalid email address.';
+    http_response_code(400);
+    $response['message'] = 'Invalid email address';
     echo json_encode($response);
     exit;
 }
 
-// Generate a unique token (in a real app, store in DB with user ID and expiration)
+// Generate reset token and link
 $token = bin2hex(random_bytes(32));
 $resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
 
@@ -66,7 +75,9 @@ try {
 
     $mail->send();
     $response['success'] = true;
+    http_response_code(200);
 } catch (Exception $e) {
+    http_response_code(500);
     $response['message'] = "Mailer Error: {$mail->ErrorInfo}";
 }
 
