@@ -43,32 +43,32 @@ pm.max_spare_servers = 3
 catch_workers_output = yes
 EOF
 
-# Copy Nginx configuration (fixed fastcgi_param and try_files)
+# Copy Nginx configuration (fixed order: include fastcgi_params first, then override SCRIPT_FILENAME with quotes)
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
-    listen 80;
-    server_name localhost;
-    root /var/www/html;
-    index index.php index.html;
+listen 80;
+server_name localhost;
+root /var/www/html;
+index index.php index.html;
 
-    # Handle PHP files
-    location ~ \.php$ {
-        try_files $uri $uri/ =404;  # Check file, directory, then return 404
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
+# Handle PHP files
+location ~ \.php$ {
+try_files $uri $uri/ =404;  # Check file, directory, then return 404
+fastcgi_pass 127.0.0.1:9000;
+fastcgi_index index.php;
+include fastcgi_params;
+fastcgi_param SCRIPT_FILENAME "$document_root$fastcgi_script_name";
+}
 
-    # Static files
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
+# Static files
+location / {
+try_files $uri $uri/ /index.php?$query_string;
+}
 
-    # Security: Deny hidden files
-    location ~ /\. {
-        deny all;
-    }
+# Security: Deny hidden files
+location ~ /\. {
+deny all;
+}
 }
 EOF
 
