@@ -2,6 +2,12 @@
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+// Ensure vendor/autoload.php is loaded
+if (!file_exists('vendor/autoload.php')) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Server error: PHPMailer not found']);
+    exit;
+}
 require 'vendor/autoload.php';
 
 // Set CORS headers
@@ -33,9 +39,6 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 
 // Generate a unique token (in a real app, store in DB with user ID and expiration)
 $token = bin2hex(random_bytes(32));
-$expiration = time() + 3600; // 1 hour expiration (enforce in reset script)
-
-// In a real app, store token in database
 $resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
 
 $mail = new PHPMailer(true);
