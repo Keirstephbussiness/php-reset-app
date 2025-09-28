@@ -7,7 +7,7 @@ RUN composer install --no-dev --optimize-autoloader --no-scripts
 
 # Stage 2: PHP-FPM setup
 FROM php:8.3-fpm-alpine AS php-fpm
-# Install necessary system dependencies and PHP extensions (e.g., for random_bytes, JSON)
+# Install necessary system dependencies and PHP extensions
 RUN apk add --no-cache \
     libpng-dev \
     libjpeg-turbo-dev \
@@ -23,7 +23,7 @@ COPY --from=composer /app/vendor /var/www/html/vendor
 
 # Stage 3: Final Nginx + PHP-FPM image
 FROM nginx:alpine AS runtime
-# Install PHP-FPM
+# Install PHP-FPM and required PHP extensions
 RUN apk add --no-cache php83-fpm php83-mysqli php83-pdo php83-pdo_mysql php83-openssl php83-json php83-mbstring
 
 # Copy PHP-FPM configuration
@@ -43,7 +43,7 @@ pm.max_spare_servers = 3
 catch_workers_output = yes
 EOF
 
-# Copy Nginx configuration (serves PHP files)
+# Copy Nginx configuration (simplified, fixed fastcgi_param)
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
     listen 80;
@@ -57,7 +57,6 @@ server {
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
-        fastcgi_param HTTPS on;  # For Render's HTTPS
     }
 
     # Static files
