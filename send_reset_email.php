@@ -1,6 +1,6 @@
 <?php
-// Set CORS headers FIRST (before any output or require)
-header('Access-Control-Allow-Origin: *'); // Allow all origins (change to 'http://127.0.0.1:5500' for security)
+// CRITICAL: Set CORS headers IMMEDIATELY - before ANY other code
+header('Access-Control-Allow-Origin: http://127.0.0.1:5500'); // Specific origin for security
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json');
@@ -11,48 +11,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+// Enable error reporting to catch issues
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // Don't display errors to user
+ini_set('log_errors', 1);
 
 $response = ['success' => false, 'message' => ''];
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $response['message'] = 'Invalid request method.';
-    echo json_encode($response);
-    exit;
-}
-
-// Check for PHPMailer (prevents 500 errors)
-if (!file_exists('vendor/autoload.php')) {
-    $response['message'] = 'Server error: PHPMailer not found.';
-    echo json_encode($response);
-    exit;
-}
-require 'vendor/autoload.php';
-
-$email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $response['message'] = 'Invalid email address.';
-    echo json_encode($response);
-    exit;
-}
-
-$token = bin2hex(random_bytes(32));
-$resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
-
-$mail = new PHPMailer(true);
 try {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        throw new Exception('Invalid request method.');
+    }
+
+    // Check for PHPMailer BEFORE requiring it
+    if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
+        throw new Exception('Server configuration error: Dependencies not installed.');
+    }
+
+    // Wrap require in try-catch
+    try {
+        require_once __DIR__ . '/vendor/autoload.php';
+    } catch (Throwable $e) {
+        throw new Exception('Server configuration error: Failed to load dependencies.');
+    }
+
+    // Validate email
+    $email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new Exception('Invalid email address.');
+    }
+
+    // Check required environment variables
+    $smtpPassword = getenv('SMTP_PASSWORD');
+    if (empty($smtpPassword)) {
+        throw new Exception('Server configuration error: SMTP not configured.');
+    }
+
+    use PHPMailer\PHPMailer\PHPMailer;
+    use PHPMailer\PHPMailer\Exception as PHPMailerException;
+
+    $token = bin2hex(random_bytes(32));
+    $resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
+
+    $mail = new PHPMailer(true);
+    
+    // SMTP Configuration
     $mail->isSMTP();
     $mail->Host = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
     $mail->SMTPAuth = true;
     $mail->Username = getenv('SMTP_USERNAME') ?: 'kiersteph@gmail.com';
-    $mail->Password = getenv('SMTP_PASSWORD') ?: '';
+    $mail->Password = $smtpPassword;
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
     $mail->Port = (int)(getenv('SMTP_PORT') ?: 587);
-
+    
+    // Email settings
     $mail->setFrom(getenv('FROM_EMAIL') ?: 'kiersteph@gmail.com', getenv('FROM_NAME') ?: 'Student Portal');
     $mail->addAddress($email);
-
+    
     $mail->isHTML(true);
     $mail->Subject = 'Password Reset Request';
     $mail->Body = "
@@ -65,8 +80,17 @@ try {
 
     $mail->send();
     $response['success'] = true;
+    $response['message'] = 'Reset email sent successfully.';
+
+} catch (PHPMailerException $e) {
+    $response['message'] = 'Failed to send email. Please try again later.';
+    error_log("PHPMailer Error: " . $e->getMessage());
 } catch (Exception $e) {
-    $response['message'] = "Mailer Error: {$mail->ErrorInfo}";
+    $response['message'] = $e->getMessage();
+    error_log("General Error: " . $e->getMessage());
+} catch (Throwable $e) {
+    $response['message'] = 'Server error. Please try again later.';
+    error_log("Fatal Error: " . $e->getMessage());
 }
 
 echo json_encode($response);
