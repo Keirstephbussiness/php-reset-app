@@ -1,6 +1,6 @@
 <?php
-// Set CORS headers FIRST (before any output)
-header('Access-Control-Allow-Origin: *');
+// Set CORS headers FIRST (before any output or require)
+header('Access-Control-Allow-Origin: *'); // Allow all origins (change to 'http://127.0.0.1:5500' for security)
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json');
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Check for PHPMailer
+// Check for PHPMailer (prevents 500 errors)
 if (!file_exists('vendor/autoload.php')) {
     $response['message'] = 'Server error: PHPMailer not found.';
     echo json_encode($response);
