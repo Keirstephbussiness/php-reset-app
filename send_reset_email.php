@@ -6,7 +6,7 @@ require 'vendor/autoload.php';
 
 // Set CORS headers
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: http://127.0.0.1:5500'); // Allow local frontend
+header('Access-Control-Allow-Origin: *'); // Changed to * for testing
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
