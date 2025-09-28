@@ -1,5 +1,13 @@
 {
     "require": {
         "phpmailer/phpmailer": "^6.9"
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "echo 'PHPMailer installed successfully'"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true
     }
 }
