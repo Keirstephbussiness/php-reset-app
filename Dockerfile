@@ -43,7 +43,7 @@ pm.max_spare_servers = 3
 catch_workers_output = yes
 EOF
 
-# Copy Nginx configuration (fixed try_files syntax)
+# Copy Nginx configuration (fixed fastcgi_param and try_files)
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
     listen 80;
@@ -56,7 +56,7 @@ server {
         try_files $uri $uri/ =404;  # Check file, directory, then return 404
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $request_filename;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
 
@@ -71,6 +71,9 @@ server {
     }
 }
 EOF
+
+# Test Nginx configuration during build
+RUN nginx -t
 
 # Copy app code (including your PHP script)
 COPY --from=php-fpm /var/www/html /var/www/html
