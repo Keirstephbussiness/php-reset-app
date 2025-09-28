@@ -43,7 +43,7 @@ pm.max_spare_servers = 3
 catch_workers_output = yes
 EOF
 
-# Copy Nginx configuration with CORS headers
+# Copy Nginx configuration with CORS headers and explicit PHP handling
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
     listen 80;
@@ -56,13 +56,14 @@ server {
     add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
     add_header Access-Control-Allow-Headers "Content-Type" always;
 
-    # Handle PHP files
+    # Handle PHP files explicitly
     location ~ \.php$ {
-        try_files $uri $uri/ =404;  # Check file, directory, then return 404
+        try_files $uri =404;  # Simplified to return 404 if file doesn't exist
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME "$document_root$fastcgi_script_name";
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
     }
 
     # Static files
@@ -84,9 +85,11 @@ RUN nginx -t
 COPY --from=php-fpm /var/www/html /var/www/html
 COPY . /var/www/html
 
-# Set permissions for web server
+# Set permissions for web server (reinforced for Nginx user)
 RUN chown -R nginx:nginx /var/www/html && \
     chmod -R 755 /var/www/html && \
+    find /var/www/html -type f -exec chmod 644 {} \; && \
+    find /var/www/html -type d -exec chmod 755 {} \; && \
     mkdir -p /var/log/php83 && \
     chown -R nginx:nginx /var/log/php83 /run
 
