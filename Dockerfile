@@ -43,7 +43,7 @@ pm.max_spare_servers = 3
 catch_workers_output = yes
 EOF
 
-# Copy Nginx configuration (fixed fastcgi_param with $request_filename, added try_files for security)
+# Copy Nginx configuration (fixed try_files syntax)
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
     listen 80;
@@ -53,7 +53,7 @@ server {
 
     # Handle PHP files
     location ~ \.php$ {
-        try_files $uri =404;  # Security: Ensure file exists before passing to PHP-FPM
+        try_files $uri $uri/ =404;  # Check file, directory, then return 404
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $request_filename;
