@@ -6,7 +6,7 @@ require 'vendor/autoload.php';
 
 // Set CORS headers
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *'); // Allow all origins (adjust for production)
+header('Access-Control-Allow-Origin: http://127.0.0.1:5500'); // Allow local frontend
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -35,8 +35,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 $token = bin2hex(random_bytes(32));
 $expiration = time() + 3600; // 1 hour expiration (enforce in reset script)
 
-// In a real app, store token in database (e.g., INSERT INTO reset_tokens (email, token, expiration))
-// For demo, we just generate and send
+// In a real app, store token in database
 $resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
 
 $mail = new PHPMailer(true);
