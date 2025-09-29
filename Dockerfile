@@ -8,7 +8,27 @@ RUN apt-get update && apt-get install -y \
     zip \
     curl \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_mysql \
+    libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libicu-dev \
+    libxml2-dev \
+    libonig-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+    bcmath \
+    exif \
+    fileinfo \
+    gd \
+    intl \
+    mbstring \
+    pcntl \
+    pdo \
+    pdo_mysql \
+    tokenizer \
+    xml \
+    zip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* || (echo "Failed to install system dependencies" && exit 1)
 
@@ -29,8 +49,9 @@ COPY composer.json composer.lock ./
 # Verify composer files
 RUN [ -f composer.json ] && [ -f composer.lock ] || (echo "composer.json or composer.lock missing" && exit 1)
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist || (echo "Composer install failed" && exit 1)
+# Install PHP dependencies with more verbosity and ignore platform reqs if needed
+# Note: Remove --ignore-platform-reqs if not necessary; it's a workaround
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --verbose || (echo "Composer install failed" && exit 1)
 
 # Stage 2: Final image
 FROM php:8.1.30-apache-bullseye
@@ -41,7 +62,27 @@ RUN a2enmod rewrite headers || (echo "Failed to enable Apache modules" && exit 1
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_mysql \
+    libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libicu-dev \
+    libxml2-dev \
+    libonig-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+    bcmath \
+    exif \
+    fileinfo \
+    gd \
+    intl \
+    mbstring \
+    pcntl \
+    pdo \
+    pdo_mysql \
+    tokenizer \
+    xml \
+    zip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* || (echo "Failed to install runtime dependencies" && exit 1)
 
