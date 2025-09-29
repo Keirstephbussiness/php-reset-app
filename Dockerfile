@@ -2,7 +2,8 @@
 FROM php:8.1.30-apache-bullseye AS builder
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN echo "Installing system dependencies..." && \
+    apt-get update && apt-get install -y \
     git \
     unzip \
     zip \
@@ -10,47 +11,57 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && docker-php-ext-install pdo pdo_mysql \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* || { echo "Failed to install system dependencies"; exit 1; }
 
 # Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- \
-    --install-dir=/usr/local/bin \
-    --filename=composer \
-    --version=2.7.9 || { echo "Composer installation failed"; exit 1; }
+RUN echo "Installing Composer..." && \
+    curl -sS https://getcomposer.org/installer -o composer-installer.php && \
+    php composer-installer.php -- --install-dir=/usr/local/bin --filename=composer --version=2.7.9 && \
+    rm composer-installer.php || { echo "Composer installation failed"; exit 1; }
+
+# Verify Composer installation
+RUN composer --version || { echo "Composer not installed correctly"; exit 1; }
 
 # Set working directory
 WORKDIR /var/www/html
 
 # Copy composer files
-COPY composer.json composer.lock ./
+COPY composer.json composer.lock ./ || { echo "Failed to copy composer files"; exit 1; }
+
+# Verify composer files
+RUN test -f composer.json && test -f composer.lock || { echo "composer.json or composer.lock missing"; exit 1; }
 
 # Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+RUN echo "Installing Composer dependencies..." && \
+    composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist || { echo "Composer install failed"; exit 1; }
 
 # Stage 2: Final image
 FROM php:8.1.30-apache-bullseye
 
 # Enable Apache modules
-RUN a2enmod rewrite headers
+RUN echo "Enabling Apache modules..." && \
+    a2enmod rewrite headers || { echo "Failed to enable Apache modules"; exit 1; }
 
-# Install only necessary runtime dependencies
-RUN apt-get update && apt-get install -y \
+# Install runtime dependencies
+RUN echo "Installing runtime dependencies..." && \
+    apt-get update && apt-get install -y \
     libpq-dev \
     && docker-php-ext-install pdo pdo_mysql \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* || { echo "Failed to install runtime dependencies"; exit 1; }
 
 # Copy application from builder stage
-COPY --from=builder /var/www/html /var/www/html
+COPY --from=builder /var/www/html /var/www/html || { echo "Failed to copy from builder stage"; exit 1; }
 
 # Copy rest of the application
-COPY . .
+COPY . . || { echo "Failed to copy application files"; exit 1; }
 
 # Create storage directory and set permissions
-RUN mkdir -p /var/www/html/storage && \
+RUN echo "Setting permissions..." && \
+    mkdir -p /var/www/html/storage && \
     chown -R www-data:www-data /var/www/html && \
     chmod -R 755 /var/www/html && \
-    chmod -R 775 /var/www/html/storage
+    chmod -R 775 /var/www/html/storage || { echo "Failed to set permissions"; exit 1; }
 
 # Use non-root user
 USER www-data
@@ -59,7 +70,7 @@ USER www-data
 EXPOSE 80
 
 # Healthcheck
-HEALTHCHECK --interval=30s --timeout=3s \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
     CMD curl -f http://localhost/ || exit 1
 
 # Start Apache
