@@ -15,9 +15,11 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libxml2-dev \
     libonig-dev \
+    libcurl4-openssl-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
     bcmath \
+    curl \
     exif \
     fileinfo \
     gd \
@@ -49,9 +51,8 @@ COPY composer.json composer.lock ./
 # Verify composer files
 RUN [ -f composer.json ] && [ -f composer.lock ] || (echo "composer.json or composer.lock missing" && exit 1)
 
-# Install PHP dependencies with more verbosity and ignore platform reqs if needed
-# Note: Remove --ignore-platform-reqs if not necessary; it's a workaround
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --verbose || (echo "Composer install failed" && exit 1)
+# Install PHP dependencies with more verbosity and unlimited memory
+RUN COMPOSER_MEMORY_LIMIT=-1 composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --verbose || (echo "Composer install failed" && exit 1)
 
 # Stage 2: Final image
 FROM php:8.1.30-apache-bullseye
@@ -69,9 +70,11 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libxml2-dev \
     libonig-dev \
+    libcurl4-openssl-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
     bcmath \
+    curl \
     exif \
     fileinfo \
     gd \
