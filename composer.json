@@ -1,13 +1,13 @@
 {
+    "name": "your-username/php-reset-app",
+    "description": "Password reset API with Symfony Mailer",
     "require": {
-        "phpmailer/phpmailer": "^6.9"
+        "php": ">=7.2.5",
+        "symfony/mailer": "^6.0"
     },
-    "scripts": {
-        "post-install-cmd": [
-            "echo 'PHPMailer installed successfully'"
-        ]
-    },
-    "config": {
-        "optimize-autoloader": true
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
     }
 }
