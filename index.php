@@ -1,4 +1,16 @@
 <?php
+// Install PHPMailer via Composer: composer require phpmailer/phpmailer
+// Or download from: https://github.com/PHPMailer/PHPMailer
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require 'vendor/autoload.php'; // If using Composer
+// OR manually include:
+// require 'path/to/PHPMailer/src/Exception.php';
+// require 'path/to/PHPMailer/src/PHPMailer.php';
+// require 'path/to/PHPMailer/src/SMTP.php';
+
 // CRITICAL: Set CORS headers IMMEDIATELY
 header('Access-Control-Allow-Origin: http://127.0.0.1:5500');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -25,11 +37,33 @@ try {
     }
 
     $token = bin2hex(random_bytes(32));
-    $resetLink = (getenv('APP_URL') ?: 'https://php-reset-app.onrender.com') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
+    $resetLink = (getenv('APP_URL') ?: 'http://localhost/StudentPortal-IHELP') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
+
+    // Create PHPMailer instance
+    $mail = new PHPMailer(true);
+
+    // SMTP Configuration for Gmail (using environment variables)
+    $mail->isSMTP();
+    $mail->Host = 'smtp.gmail.com';
+    $mail->SMTPAuth = true;
+    $mail->Username = getenv('GMAIL_USERNAME'); // From Render env variables
+    $mail->Password = getenv('GMAIL_APP_PASSWORD'); // From Render env variables
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port = 587;
+
+    // Optional: Enable debugging (remove in production)
+    // $mail->SMTPDebug = 2; // 0=off, 1=client, 2=client+server
+
+    // Sender and recipient (using environment variable)
+    $gmailAddress = getenv('GMAIL_USERNAME');
+    $mail->setFrom($gmailAddress, 'Student Portal');
+    $mail->addAddress($email);
+    $mail->addReplyTo($gmailAddress, 'Student Portal');
 
     // Email content
-    $subject = 'Password Reset Request - Student Portal';
-    $message = "
+    $mail->isHTML(true);
+    $mail->Subject = 'Password Reset Request - Student Portal';
+    $mail->Body = "
 <!DOCTYPE html>
 <html>
 <head>
@@ -53,30 +87,22 @@ try {
 </body>
 </html>";
 
-    // Email headers
-    $headers = [
-        'MIME-Version: 1.0',
-        'Content-type: text/html; charset=UTF-8',
-        'From: Student Portal <noreply@' . parse_url($_SERVER['HTTP_HOST'] ?? 'localhost', PHP_URL_HOST) . '>',
-        'Reply-To: noreply@' . parse_url($_SERVER['HTTP_HOST'] ?? 'localhost', PHP_URL_HOST),
-        'X-Mailer: PHP/' . phpversion(),
-        'X-Priority: 3',
-        'X-MSMail-Priority: Normal'
-    ];
+    $mail->AltBody = "Password Reset Request\n\nYou have requested to reset your password.\n\nReset link: $resetLink\n\nThis link will expire in 1 hour.";
 
-    // Send email using PHP's built-in mail() function
-    if (mail($email, $subject, $message, implode("\r\n", $headers))) {
-        $response['success'] = true;
-        $response['message'] = 'Reset email sent successfully.';
-        
-        // Log successful email (optional)
-        error_log("Password reset email sent to: " . $email);
-    } else {
-        throw new Exception('Failed to send email. Mail server may not be configured.');
-    }
+    // Send email
+    $mail->send();
+    
+    $response['success'] = true;
+    $response['message'] = 'Reset email sent successfully.';
+    error_log("Password reset email sent to: " . $email);
 
 } catch (Exception $e) {
-    $response['message'] = $e->getMessage();
-    error_log("Email Error: " . $e->getMessage());
+    $response['message'] = 'Email could not be sent. Error: ' . $mail->ErrorInfo;
+    error_log("PHPMailer Error: " . $mail->ErrorInfo);
 } catch (Throwable $e) {
-    $response['message']
+    $response['message'] = 'An error occurred: ' . $e->getMessage();
+    error_log("General Error: " . $e->getMessage());
+}
+
+echo json_encode($response);
+?>
