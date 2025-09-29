@@ -1,23 +1,28 @@
 <?php
-// Install Symfony Mailer via Composer: composer require symfony/mailer
+// CORS headers FIRST - before ANY other code
+if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Max-Age: 86400');
+}
 
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD'])) {
+        header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+    }
+    if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {
+        header('Access-Control-Allow-Headers: ' . $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']);
+    }
+    exit(0);
+}
+
+header('Content-Type: application/json');
+
+// Install Symfony Mailer via Composer: composer require symfony/mailer
 use Symfony\Component\Mailer\Transport;
 use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mime\Email;
-
 require 'vendor/autoload.php'; // Load Composer autoloader
-
-// CRITICAL: Set CORS headers IMMEDIATELY
-header('Access-Control-Allow-Origin: http://127.0.0.1:5500');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Content-Type: application/json');
-
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
-}
 
 $response = ['success' => false, 'message' => ''];
 
@@ -25,18 +30,19 @@ try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Invalid request method.');
     }
-
+    
     // Validate email
     $email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new Exception('Invalid email address.');
     }
-
+    
     $token = bin2hex(random_bytes(32));
+    
     // Use APP_URL from environment, fallback to production Render URL
     $baseUrl = getenv('APP_URL') ?: 'https://php-reset-app.onrender.com';
     $resetLink = $baseUrl . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
-
+    
     // Configure Symfony Mailer with Gmail SMTP
     $dsn = sprintf('smtp://%s:%s@smtp.gmail.com:587?encryption=starttls', 
         urlencode(getenv('GMAIL_USERNAME')), 
@@ -44,7 +50,7 @@ try {
     );
     $transport = Transport::fromDsn($dsn);
     $mailer = new Mailer($transport);
-
+    
     // Create email
     $emailMessage = (new Email())
         ->from(getenv('GMAIL_USERNAME'))
@@ -75,14 +81,14 @@ try {
 </body>
 </html>")
         ->text("Password Reset Request\n\nYou have requested to reset your password.\n\nReset link: $resetLink\n\nThis link will expire in 1 hour.");
-
+    
     // Send email
     $mailer->send($emailMessage);
-
+    
     $response['success'] = true;
     $response['message'] = 'Reset email sent successfully.';
     error_log("Password reset email sent to: " . $email);
-
+    
 } catch (Exception $e) {
     $response['message'] = 'Email could not be sent. Error: ' . $e->getMessage();
     error_log("Symfony Mailer Error: " . $e->getMessage());
