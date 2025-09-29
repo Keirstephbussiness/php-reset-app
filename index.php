@@ -1,15 +1,11 @@
 <?php
-// Install PHPMailer via Composer: composer require phpmailer/phpmailer
-// Or download from: https://github.com/PHPMailer/PHPMailer
+// Install Symfony Mailer via Composer: composer require symfony/mailer
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+use Symfony\Component\Mailer\Transport;
+use Symfony\Component\Mailer\Mailer;
+use Symfony\Component\Mime\Email;
 
-require 'vendor/autoload.php'; // If using Composer
-// OR manually include:
-// require 'path/to/PHPMailer/src/Exception.php';
-// require 'path/to/PHPMailer/src/PHPMailer.php';
-// require 'path/to/PHPMailer/src/SMTP.php';
+require 'vendor/autoload.php'; // Load Composer autoloader
 
 // CRITICAL: Set CORS headers IMMEDIATELY
 header('Access-Control-Allow-Origin: http://127.0.0.1:5500');
@@ -37,33 +33,25 @@ try {
     }
 
     $token = bin2hex(random_bytes(32));
-    $resetLink = (getenv('APP_URL') ?: 'http://localhost/StudentPortal-IHELP') . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
+    // Use APP_URL from environment, fallback to production Render URL
+    $baseUrl = getenv('APP_URL') ?: 'https://php-reset-app.onrender.com';
+    $resetLink = $baseUrl . '/reset.php?email=' . urlencode($email) . '&token=' . $token;
 
-    // Create PHPMailer instance
-    $mail = new PHPMailer(true);
+    // Configure Symfony Mailer with Gmail SMTP
+    $dsn = sprintf('smtp://%s:%s@smtp.gmail.com:587?encryption=starttls', 
+        urlencode(getenv('GMAIL_USERNAME')), 
+        urlencode(getenv('GMAIL_APP_PASSWORD'))
+    );
+    $transport = Transport::fromDsn($dsn);
+    $mailer = new Mailer($transport);
 
-    // SMTP Configuration for Gmail (using environment variables)
-    $mail->isSMTP();
-    $mail->Host = 'smtp.gmail.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = getenv('GMAIL_USERNAME'); // From Render env variables
-    $mail->Password = getenv('GMAIL_APP_PASSWORD'); // From Render env variables
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-
-    // Optional: Enable debugging (remove in production)
-    // $mail->SMTPDebug = 2; // 0=off, 1=client, 2=client+server
-
-    // Sender and recipient (using environment variable)
-    $gmailAddress = getenv('GMAIL_USERNAME');
-    $mail->setFrom($gmailAddress, 'Student Portal');
-    $mail->addAddress($email);
-    $mail->addReplyTo($gmailAddress, 'Student Portal');
-
-    // Email content
-    $mail->isHTML(true);
-    $mail->Subject = 'Password Reset Request - Student Portal';
-    $mail->Body = "
+    // Create email
+    $emailMessage = (new Email())
+        ->from(getenv('GMAIL_USERNAME'))
+        ->to($email)
+        ->replyTo(getenv('GMAIL_USERNAME'), 'Student Portal')
+        ->subject('Password Reset Request - Student Portal')
+        ->html("
 <!DOCTYPE html>
 <html>
 <head>
@@ -85,20 +73,19 @@ try {
         <p style='font-size: 14px; color: #666;'>This is an automated message, please do not reply to this email.</p>
     </div>
 </body>
-</html>";
-
-    $mail->AltBody = "Password Reset Request\n\nYou have requested to reset your password.\n\nReset link: $resetLink\n\nThis link will expire in 1 hour.";
+</html>")
+        ->text("Password Reset Request\n\nYou have requested to reset your password.\n\nReset link: $resetLink\n\nThis link will expire in 1 hour.");
 
     // Send email
-    $mail->send();
-    
+    $mailer->send($emailMessage);
+
     $response['success'] = true;
     $response['message'] = 'Reset email sent successfully.';
     error_log("Password reset email sent to: " . $email);
 
 } catch (Exception $e) {
-    $response['message'] = 'Email could not be sent. Error: ' . $mail->ErrorInfo;
-    error_log("PHPMailer Error: " . $mail->ErrorInfo);
+    $response['message'] = 'Email could not be sent. Error: ' . $e->getMessage();
+    error_log("Symfony Mailer Error: " . $e->getMessage());
 } catch (Throwable $e) {
     $response['message'] = 'An error occurred: ' . $e->getMessage();
     error_log("General Error: " . $e->getMessage());
